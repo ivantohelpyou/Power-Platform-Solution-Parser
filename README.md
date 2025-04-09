@@ -20,3 +20,16 @@ This repository contains a Python script, `parse-entities.py`, designed to parse
    ```bash
    git clone <repository-url>
    cd <repository-folder>
+   
+### Command Line Parameters
+
+The script accepts the following command line parameters:
+
+1. **`solution_folder`** (positional argument):  
+    The folder containing the `customizations.xml` file. This is a required argument.
+
+2. **`--prefixes`** (optional argument):  
+    A list of custom publisher prefixes to strip. If not provided, a default list of prefixes (`DEFAULT_PREFIXES`) will be used.  
+    - **Usage**: `--prefixes prefix1 prefix2 ...`
+    - **Default**: `DEFAULT_PREFIXES`
+2. Command line parameters
