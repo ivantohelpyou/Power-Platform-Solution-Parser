@@ -1,8 +1,19 @@
 import xml.etree.ElementTree as ET
 import os
 import sys
+import argparse
 
-def parse_entities(xml_file):
+# Default publisher prefixes
+DEFAULT_PREFIXES = ["mcdev", "new"]  ## add your custom publisher prefixes here
+
+def strip_prefix(name, prefixes):
+    """Remove the prefix and the following underscore from the name."""
+    for prefix in prefixes:
+        if name.startswith(prefix + "_"):
+            return name[len(prefix) + 1:]
+    return name
+
+def parse_entities(xml_file, prefixes):
     tree = ET.parse(xml_file)
     root = tree.getroot()
     ns = {'xsi': 'http://www.w3.org/2001/XMLSchema-instance'}
@@ -11,7 +22,7 @@ def parse_entities(xml_file):
 
     for entity in root.findall(".//Entity"):
         entity_name = entity.find("./Name").text
-        stripped_entity_name = entity_name.replace("mcdev_", "").replace("new_", "")
+        stripped_entity_name = strip_prefix(entity_name, prefixes)
         attributes = []
         relationships = []
         primary_keys = []
@@ -21,10 +32,11 @@ def parse_entities(xml_file):
         # Extract attributes with custom publisher prefixes
         for attribute in entity.findall(".//attribute"):
             physical_name = attribute.get("PhysicalName")
-            if physical_name and (physical_name.startswith("mcdev_") or physical_name.startswith("new_")):
+            if physical_name:
+                stripped_physical_name = strip_prefix(physical_name, prefixes)
                 attribute_type = attribute.get("Type", "Unknown")
                 description = attribute.get("Description", "No description")
-                attributes.append({"name": physical_name, "type": attribute_type, "description": description})
+                attributes.append({"name": stripped_physical_name, "type": attribute_type, "description": description})
 
         # Extract relationships involving the current entity
         for relationship in root.findall(".//EntityRelationship"):
@@ -41,19 +53,19 @@ def parse_entities(xml_file):
             ):
                 relationships.append({
                     "type": relationship_type.text,
-                    "referencing_entity": referencing_entity.text,
-                    "referenced_entity": referenced_entity.text
+                    "referencing_entity": strip_prefix(referencing_entity.text, prefixes),
+                    "referenced_entity": strip_prefix(referenced_entity.text, prefixes)
                 })
 
         # Extract primary keys
         for pk in entity.findall(".//PrimaryKey"):
-            primary_keys.append(pk.get("Name"))
+            primary_keys.append(strip_prefix(pk.get("Name"), prefixes))
 
         # Extract foreign keys
         for fk in entity.findall(".//ForeignKey"):
             foreign_keys.append({
-                "name": fk.get("Name"),
-                "referenced_entity": fk.get("ReferencedEntity")
+                "name": strip_prefix(fk.get("Name"), prefixes),
+                "referenced_entity": strip_prefix(fk.get("ReferencedEntity"), prefixes)
             })
 
         # Add entity details to the list
@@ -81,11 +93,13 @@ def parse_workflows(xml_file):
     return workflows
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python parse-entities.py <SolutionFolderName>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Parse Dynamics 365 solution entities and workflows.")
+    parser.add_argument("solution_folder", help="The folder containing the customizations.xml file.")
+    parser.add_argument("--prefixes", nargs="+", default=DEFAULT_PREFIXES, help="Custom publisher prefixes to strip (default: %(default)s).")
+    args = parser.parse_args()
 
-    solution_folder = sys.argv[1]
+    solution_folder = args.solution_folder
+    prefixes = args.prefixes
     base_path = os.getcwd()
     xml_file = os.path.join(base_path, solution_folder, "customizations.xml")
 
@@ -97,7 +111,7 @@ def main():
         print(f"Error: The file '{xml_file}' does not exist.")
         sys.exit(1)
 
-    entities = parse_entities(xml_file)
+    entities = parse_entities(xml_file, prefixes)
     workflows = parse_workflows(xml_file)
 
     # Print the parsed entities
@@ -105,19 +119,14 @@ def main():
         print(f"Entity: {entity['entity_name']}")
         print(f"  Attributes:")
         for attribute in entity['attributes']:
-            stripped_name = attribute['name'].replace("mcdev_", "").replace("new_", "")  # Remove prefixes
-            print(f"    - {stripped_name} ({attribute['type']}): {attribute['description']}")
+            print(f"    - {attribute['name']} ({attribute['type']}): {attribute['description']}")
         print(f"  Relationships:")
         for relationship in entity['relationships']:
-            stripped_referencing = relationship['referencing_entity'].replace("mcdev_", "").replace("new_", "")
-            stripped_referenced = relationship['referenced_entity'].replace("mcdev_", "").replace("new_", "")
-            print(f"    - {relationship['type']} between {stripped_referencing} and {stripped_referenced}")
+            print(f"    - {relationship['type']} between {relationship['referencing_entity']} and {relationship['referenced_entity']}")
         print(f"  Primary Keys: {', '.join(entity['primary_keys'])}")
         print(f"  Foreign Keys:")
         for fk in entity['foreign_keys']:
-            stripped_fk_name = fk['name'].replace("mcdev_", "").replace("new_", "")
-            stripped_referenced_entity = fk['referenced_entity'].replace("mcdev_", "").replace("new_", "")
-            print(f"    - {stripped_fk_name} references {stripped_referenced_entity}")
+            print(f"    - {fk['name']} references {fk['referenced_entity']}")
         print(f"  Ownership: {entity['ownership']}")
         print()
 
